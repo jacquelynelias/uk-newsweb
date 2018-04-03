@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<script type="text/javascript" src="https://d3js.org/d3.v4.min.js"></script>
+		<script src="https://d3js.org/d3-geo-projection.v2.min.js"></script>
+		<script src="https://pym.nprapps.org/pym.v1.min.js"></script>
+		<script src="https://unpkg.com/d3-simple-slider@0.2.0/build/d3-simple-slider.js"></script>
+		<link href="styles.css" rel="stylesheet" type="text/css">
+	</head>
+	<body>
+		<p id="value"></p>
+		<div id="slider"></div>
+		<svg id="viz"></svg>
+	</body>
+	<script type="text/javascript">
+		formatDate = d3.timeFormat("%b %d");
+		dict = {"2010": [],"2011": [], "2012":[],"2013": [], "2014": [], "2015": [], "2016": [], "2017": []}
+		//Set data range of slider
+		var dates = d3.range(0, 8).map(function (d) { return new Date(2010 + d, 1, 1); });
+
+		//Set responsive width for viz
+		var width = window.innerWidth
+        	|| document.documentElement.clientWidth
+        	|| document.body.clientWidth;
+		
+		country_xy = [];
+	
+		//Set responsive height for viz
+		var height = width * .625
+
+		var radius = d3.scaleSqrt()
+    		.domain([1,10000])
+    		.range([3,50])
+    		.clamp(true)
+		
+		div = d3.select("body").append("div")	
+    		.attr("class", "tooltip")				
+			.style("opacity", 0);
+			
+				var json_ref = "./assets/all_counts.json"
+		d3.json(json_ref, function(error,data) {
+			console.log("data is " + data)
+			if (error) return console.log(error); //unknown error, check the console
+			var stuff = data;
+
+			
+			for (var l in stuff) {
+				for (var m in stuff[l]) {
+					if(dict[l.substring(0,4)][stuff[l][m].ref]) {
+						dict[l.substring(0,4)][stuff[l][m].ref] += 1
+					} else {
+						dict[l.substring(0,4)][stuff[l][m].ref] = 1
+					}
+				}
+			}
+			//console.log(dict)
+
+			
+		});
+		//Creates slider
+		var slider = d3.sliderHorizontal()
+			.min(d3.min(dates))
+			.max(d3.max(dates))
+			.step(1000 * 60 * 60 * 24 * 365)
+			.width(width - 50)
+    		.tickFormat(d3.timeFormat('%Y'))
+   			.tickValues(dates)
+			.on('onchange', val => {
+				circleShell.selectAll("circle").data([]).exit().remove()
+				//d3.select("p#value").text(d3.timeFormat('%Y')(val));
+				var json_ref = "./assets/all_counts.json"
+				d3.json(json_ref, function(error,data) {
+					//console.log(data)
+					if (error) return console.log(error); //unknown error, check the console
+					var stuff = data;
+					console.log(stuff)
+					for (var l in stuff) {
+						var value = d3.timeFormat('%Y')(slider.value())
+						if(l.substring(0,4) === value) {
+							circleShell.selectAll("circle")
+								.data(stuff[l]).enter()
+								.append("circle")
+								.attr("cx", function (d, i) {
+									var coords = projection([+d.longitude+Math.random(20), +d.latitude+Math.random(20)])
+									if (coords) {
+									  return coords[0]  
+									}
+
+								})
+								.attr("cy", function(d) {
+									var coords = projection([+d.longitude, +d.latitude])
+									if (coords) {
+									  return coords[1]  
+									}
+								})
+								.attr("r", function(d) {
+									//console.log(l.substring(0,4))
+									//console.log(d.ref)
+									//console.log(dict)
+									return radius(dict[l.substring(0,4)][d.ref]);
+								})
+								.attr("fill", "#86c5da")
+								.attr("opacity", ".6")
+								.on('mouseover', function(d) {
+									//console.log('in mouseover')
+									div.transition()		
+                						.duration(200)		
+                						.style("opacity", .9);		
+            						div	.html("<strong>Country</strong> " + d.ref + "<br><strong>Story:</strong> " + d.headline)	
+										.style("left", (d3.event.pageX) + "px")		
+										.style("top", (d3.event.pageY - 28) + "px");	
+								})
+								.on('mouseout', function(d) {		
+									div.transition()		
+										.duration(500)		
+										.style("opacity", 0);
+								})
+						}
+					}
+					
+				});
+			})
+		
+
+		
+		
+		//Set width and height of svg
+		var svg = d3.select("#viz")
+    		.attr("width", width)
+			.attr("height", height)
+			.append('g')
+				.attr("transform", "translate(30,0)")
+				.call(slider);
+		//d3.select("p#value").text(d3.timeFormat('%Y')(slider.value()));
+
+    	var projection = d3.geoEquirectangular()
+    		.scale(height / Math.PI)
+            .translate( [width / 2, height / 1.5]);
+
+    	var path = d3.geoPath()
+    		.projection(projection);
+
+		var features = svg.append('g')
+			.attr("class", "features");
+
+		var mapShell = features.append('g')
+		var circleShell = features.append('g')
+		var label = features.append('g')
+		
+    	var json_url = "./assets/world.geojson"
+    	d3.json(json_url,function(error,geodata) {
+		  if (error) return console.log(error); //unknown error, check the console
+
+		    //Create a path for each map feature in the data
+		    mapShell.selectAll("path")
+		      .data(geodata.features)
+		      .enter()
+		      .append("path")
+		      .attr("d",path)
+			  .style("fill", "#d3d3d3")
+			  .style("stroke", "#FFFFFF")
+
+		})
+
+
+
+	</script>
+</html>
